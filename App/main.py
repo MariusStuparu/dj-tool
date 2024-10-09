@@ -7,6 +7,8 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from ttkbootstrap import utility
 
+from text_processing import PlaylistFileProcessing as PFP
+
 
 """
 This is a simple GUI application that checks if a list of tracks are in compliance with the DJ regulatory standards.
@@ -244,6 +246,8 @@ class DJRegulatoryTrackChecker(ttk.Frame):
             s_f.write(f"work_dir='{self.work_dir.get()}'\n")
             s_f.write(f"track_list='{self.track_list.get()}'\n")
             s_f.write(f"dummy_video='{self.dummy_video.get()}'\n")
+
+        playlist = PFP(self.track_list.get())
 
     def on_cancel(self):
         self.processing = False
