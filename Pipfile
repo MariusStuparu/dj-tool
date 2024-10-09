@@ -5,9 +5,9 @@ name = "pypi"
 
 [packages]
 ttkbootstrap = "*"
-# requests = "*"
 
 [dev-packages]
+py2app = "*"
 
 [requires]
 python_version = "3.11"
