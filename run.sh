@@ -2,4 +2,4 @@
 
 pipenv shell
 
-python3 main.py
+python3 App/main.py
