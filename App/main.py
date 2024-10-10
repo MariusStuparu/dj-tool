@@ -7,7 +7,7 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from ttkbootstrap import utility
 
-from text_processing import PlaylistFileProcessing as PFP
+from text_processing import PlaylistFileProcessing as PFP, TextProcessingException
 
 
 """
@@ -23,7 +23,8 @@ class DJRegulatoryTrackChecker(ttk.Frame):
     def __init__(self, master):
         super().__init__(master, padding=15)
         self.pack(fill=BOTH, expand=YES)
-        self.progress = 20
+        self.progress = 0
+        self.tracks_count = 0
 
         """ UI elements """
         self.progress_bar = None
@@ -39,6 +40,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
         self.work_dir = ttk.StringVar(value=self._path)
         self.track_list = ttk.StringVar()
         self.dummy_video = ttk.StringVar()
+        self.playlist = None
 
         if not self.settings_path.exists():
             self.settings_path.mkdir()
@@ -194,7 +196,8 @@ class DJRegulatoryTrackChecker(ttk.Frame):
             master=progress_row,
             mode=DETERMINATE,
             bootstyle=(STRIPED, SUCCESS),
-            value=0
+            value=0,
+            maximum=100,
         )
         self.progress_bar.pack(fill='x', expand=True)
 
@@ -207,10 +210,17 @@ class DJRegulatoryTrackChecker(ttk.Frame):
 
         self.cancel_btn['state'] = NORMAL if self.processing else DISABLED
 
+    """ Insert text into the output log """
+    def insert_text_log(self, text):
+        self.outlog_text['state'] = NORMAL
+        self.outlog_text.insert(END, text)
+        self.outlog_text['state'] = DISABLED
+
     """
     Event handlers
     """
 
+    """ Clicked browse output directory """
     def on_browse_outdir(self):
         path = askdirectory(
             title='Select output directory',
@@ -220,6 +230,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
         if path:
             self.work_dir.set(path)
 
+    """ Clicked browse playlist file """
     def on_browse_sourcefile(self):
         path = askopenfilename(
             title='Select track list file',
@@ -229,6 +240,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
         if path:
             self.track_list.set(path)
 
+    """ Clicked browse dummy video file """
     def on_browse_videofile(self):
         path = askopenfilename(
             title='Select dummy video file',
@@ -238,6 +250,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
         if path:
             self.dummy_video.set(path)
 
+    """ Clicked Start button """
     def on_start(self):
         self.processing = True
         self.interaction_onoff()
@@ -247,8 +260,15 @@ class DJRegulatoryTrackChecker(ttk.Frame):
             s_f.write(f"track_list='{self.track_list.get()}'\n")
             s_f.write(f"dummy_video='{self.dummy_video.get()}'\n")
 
-        playlist = PFP(self.track_list.get())
+        try:
+            self.playlist = PFP(self.track_list.get())
+            self.playlist.read_file()
+            self.tracks_count = len(self.playlist.tracks)
+            self.progress_bar['value'] = 5
+        except TextProcessingException as txt_err:
+            self.insert_text_log(f"ERROR: {txt_err}\n")
 
+    """ Clicked Cancel button """
     def on_cancel(self):
         self.processing = False
         self.interaction_onoff()
