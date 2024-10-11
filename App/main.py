@@ -211,8 +211,9 @@ class DJRegulatoryTrackChecker(ttk.Frame):
         self.cancel_btn['state'] = NORMAL if self.processing else DISABLED
 
     """ Insert text into the output log """
-    def insert_text_log(self, text):
+    def insert_text_log(self, text, clear=False):
         self.outlog_text['state'] = NORMAL
+        self.outlog_text.delete('1.0', END) if clear else None
         self.outlog_text.insert(END, text)
         self.outlog_text['state'] = DISABLED
 
@@ -262,8 +263,14 @@ class DJRegulatoryTrackChecker(ttk.Frame):
 
         try:
             self.playlist = PFP(self.track_list.get())
-            self.playlist.read_file()
+
+            Thread(
+                target=self.playlist.read_file(),
+                daemon=True
+            ).start()
+
             self.tracks_count = len(self.playlist.tracks)
+            self.insert_text_log(text=f"Playlist loaded with {self.tracks_count} tracks\n", clear=True)
             self.progress_bar['value'] = 5
         except TextProcessingException as txt_err:
             self.insert_text_log(f"ERROR: {txt_err}\n")
