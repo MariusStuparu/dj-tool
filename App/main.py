@@ -16,6 +16,7 @@ This is a simple GUI application that checks if a list of tracks are in complian
 
 
 class DJRegulatoryTrackChecker(ttk.Frame):
+    MAX_QUEUE_SIZE = 100
     processing = False
     settings_path = Path().home().joinpath('.djregulatorytrackchecker')
     settings_file = settings_path.joinpath('settings.txt')
@@ -25,6 +26,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
         self.pack(fill=BOTH, expand=YES)
         self.progress = 0
         self.tracks_count = 0
+        self.queue = Queue(maxsize=self.MAX_QUEUE_SIZE)
 
         """ UI elements """
         self.progress_bar = None
@@ -261,6 +263,20 @@ class DJRegulatoryTrackChecker(ttk.Frame):
             s_f.write(f"track_list='{self.track_list.get()}'\n")
             s_f.write(f"dummy_video='{self.dummy_video.get()}'\n")
 
+        if self.read_playlist():
+            self.process_playlist()
+
+    """ Clicked Cancel button """
+    def on_cancel(self):
+        self.processing = False
+        self.interaction_onoff()
+
+    """
+    Main functions
+    """
+
+    """ Read the text playlist file """
+    def read_playlist(self) -> bool:
         try:
             self.playlist = PFP(self.track_list.get())
 
@@ -270,15 +286,26 @@ class DJRegulatoryTrackChecker(ttk.Frame):
             ).start()
 
             self.tracks_count = len(self.playlist.tracks)
+
+            if self.tracks_count > self.MAX_QUEUE_SIZE:
+                error_text = f"Playlist too large: {self.tracks_count} tracks." \
+                             f"Please limit to {self.MAX_QUEUE_SIZE} tracks."
+                self.insert_text_log(text=error_text)
+                raise TextProcessingException(error_text)
+            else:
+                for item in self.playlist.tracks:
+                    self.queue.put(item)
+
             self.insert_text_log(text=f"Playlist loaded with {self.tracks_count} tracks\n", clear=True)
             self.progress_bar['value'] = 5
         except TextProcessingException as txt_err:
             self.insert_text_log(f"ERROR: {txt_err}\n")
 
-    """ Clicked Cancel button """
-    def on_cancel(self):
-        self.processing = False
-        self.interaction_onoff()
+        return True
+
+    """ Process the playlist """
+    def process_playlist(self):
+        pass
 
 
 if __name__ == '__main__':

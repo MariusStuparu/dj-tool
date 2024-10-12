@@ -39,7 +39,6 @@ class PlaylistFileProcessing:
                         continue
                     else:
                         line += 1
-                raise TextProcessingException('Testing IndexError: Nothing wrong.')
             except IndexError as idx_err:
                 raise TextProcessingException(f'IndexError: The playlist file is not formatted correctly.\n${idx_err}')
 
