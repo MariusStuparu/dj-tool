@@ -8,7 +8,7 @@ from ttkbootstrap.constants import *
 from ttkbootstrap import utility
 
 from text_processing import PlaylistFileProcessing as PFP, TextProcessingException
-
+from audio_processing import AudioFileProcessing as AFP, AudioProcessingError
 
 """
 This is a simple GUI application that checks if a list of tracks are in compliance with the DJ regulatory standards.
@@ -43,6 +43,10 @@ class DJRegulatoryTrackChecker(ttk.Frame):
         self.track_list = ttk.StringVar()
         self.dummy_video = ttk.StringVar()
         self.playlist = None
+
+        """ Runtime flags """
+        self.playlist_read = False
+        self.playlist_processed = False
 
         if not self.settings_path.exists():
             self.settings_path.mkdir()
@@ -263,8 +267,8 @@ class DJRegulatoryTrackChecker(ttk.Frame):
             s_f.write(f"track_list='{self.track_list.get()}'\n")
             s_f.write(f"dummy_video='{self.dummy_video.get()}'\n")
 
-        if self.read_playlist():
-            self.process_playlist()
+        self.read_playlist()
+        if self.playlist_read: self.process_playlist()
 
     """ Clicked Cancel button """
     def on_cancel(self):
@@ -276,7 +280,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
     """
 
     """ Read the text playlist file """
-    def read_playlist(self) -> bool:
+    def read_playlist(self):
         try:
             self.playlist = PFP(self.track_list.get())
 
@@ -301,11 +305,23 @@ class DJRegulatoryTrackChecker(ttk.Frame):
         except TextProcessingException as txt_err:
             self.insert_text_log(f"ERROR: {txt_err}\n")
 
-        return True
+        self.playlist_read = True
 
     """ Process the playlist """
     def process_playlist(self):
-        pass
+        try:
+            while not self.queue.empty():
+                track_details = self.queue.get()
+                track = AFP(file_path=track_details['track_file'], working_dir=self.work_dir.get())
+
+                Thread(
+                    target=track.process_track(),
+                    daemon=True
+                ).start()
+        except AudioProcessingError as audio_err:
+            self.insert_text_log(f"ERROR: {audio_err}\n")
+
+        self.playlist_processed = True
 
 
 if __name__ == '__main__':
