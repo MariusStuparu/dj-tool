@@ -5,18 +5,18 @@ from threading import Thread
 from tkinter.filedialog import askdirectory, askopenfilename
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
-from ttkbootstrap import utility
 
 from text_processing import PlaylistFileProcessing as PFP, TextProcessingException
 from audio_processing import AudioFileProcessing as AFP, AudioProcessingError
+
 
 """
 This is a simple GUI application that checks if a list of tracks are in compliance with the DJ regulatory standards.
 """
 
+MAX_QUEUE_SIZE = 100
 
 class DJRegulatoryTrackChecker(ttk.Frame):
-    MAX_QUEUE_SIZE = 100
     processing = False
     settings_path = Path().home().joinpath('.djregulatorytrackchecker')
     settings_file = settings_path.joinpath('settings.txt')
@@ -26,7 +26,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
         self.pack(fill=BOTH, expand=YES)
         self.progress = 0
         self.tracks_count = 0
-        self.queue = Queue(maxsize=self.MAX_QUEUE_SIZE)
+        self.queue = Queue(maxsize=MAX_QUEUE_SIZE)
 
         """ UI elements """
         self.progress_bar = None
@@ -291,9 +291,9 @@ class DJRegulatoryTrackChecker(ttk.Frame):
 
             self.tracks_count = len(self.playlist.tracks)
 
-            if self.tracks_count > self.MAX_QUEUE_SIZE:
+            if self.tracks_count > MAX_QUEUE_SIZE:
                 error_text = f"Playlist too large: {self.tracks_count} tracks." \
-                             f"Please limit to {self.MAX_QUEUE_SIZE} tracks."
+                             f"Please limit to {MAX_QUEUE_SIZE} tracks."
                 self.insert_text_log(text=error_text)
                 raise TextProcessingException(error_text)
             else:
