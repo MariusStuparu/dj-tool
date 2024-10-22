@@ -10,6 +10,7 @@ moviepy = "*"
 
 [dev-packages]
 py2app = "*"
+setuptools = "==70.3.0"
 
 [requires]
 python_version = "3.11"
