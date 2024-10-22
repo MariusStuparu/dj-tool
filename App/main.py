@@ -7,8 +7,7 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
 from text_processing import PlaylistFileProcessing as PFP, TextProcessingException
-from audio_processing import AudioFileProcessing as AFP, AudioProcessingError
-
+from audio_processing import AudioFileProcessing as AFP, AudioSegmentsProcessing as ASP, AudioProcessingError
 
 """
 This is a simple GUI application that checks if a list of tracks are in compliance with the DJ regulatory standards.
@@ -43,6 +42,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
         self.track_list = ttk.StringVar()
         self.dummy_video = ttk.StringVar()
         self.playlist = None
+        self.concatenated_audio_filename = None
 
         """ Runtime flags """
         self.playlist_read = False
@@ -268,7 +268,12 @@ class DJRegulatoryTrackChecker(ttk.Frame):
             s_f.write(f"dummy_video='{self.dummy_video.get()}'\n")
 
         self.read_playlist()
-        if self.playlist_read: self.process_playlist()
+        if self.playlist_read:
+            self.process_playlist()
+        if self.playlist_processed:
+            self.concatenate_segments()
+        if self.concatenated_audio_filename and self.dummy_video.get():
+            self.generate_video()
 
     """ Clicked Cancel button """
     def on_cancel(self):
@@ -284,10 +289,12 @@ class DJRegulatoryTrackChecker(ttk.Frame):
         try:
             self.playlist = PFP(self.track_list.get())
 
-            Thread(
+            read_thread = Thread(
                 target=self.playlist.read_file(),
                 daemon=True
-            ).start()
+            )
+            read_thread.start()
+            read_thread.join()
 
             self.tracks_count = len(self.playlist.tracks)
 
@@ -310,19 +317,43 @@ class DJRegulatoryTrackChecker(ttk.Frame):
     """ Process the playlist """
     def process_playlist(self):
         try:
-            while not self.queue.empty():
+            while self.processing and not self.queue.empty():
                 track_details = self.queue.get()
                 track = AFP(file_path=track_details['track_file'], working_dir=self.work_dir.get())
 
-                Thread(
+                track_thread = Thread(
                     target=track.process_track(),
                     daemon=True
-                ).start()
+                )
+
+                track_thread.start()
+                track_thread.join()
         except AudioProcessingError as audio_err:
             self.insert_text_log(f"ERROR: {audio_err}\n")
 
         self.playlist_processed = True
 
+    """ Join the generated segments into a single mp3 track """
+    def concatenate_segments(self):
+        try:
+            result_queue = Queue()
+            concat_audio = ASP(self.work_dir.get())
+            concat_thread = Thread(
+                target=concat_audio.concatenate_queue,
+                args=(result_queue, ),
+                daemon=True
+            )
+            concat_thread.start()
+            concat_thread.join()
+
+            if not result_queue.empty():
+                self.concatenated_audio_filename = result_queue.get()
+        except AudioProcessingError as concat_err:
+            self.insert_text_log(f"ERROR: {concat_err}\n")
+
+    """ Generate the video file """
+    def generate_video(self):
+        pass
 
 if __name__ == '__main__':
     app = ttk.Window(
