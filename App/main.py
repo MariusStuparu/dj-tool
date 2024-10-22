@@ -1,13 +1,17 @@
 from pathlib import Path
 from queue import Queue
 from threading import Thread
+from os import startfile as Startfile
+from platform import system as System
+from subprocess import Popen
 
 from tkinter.filedialog import askdirectory, askopenfilename
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
-from text_processing import PlaylistFileProcessing as PFP, TextProcessingException
-from audio_processing import AudioFileProcessing as AFP, AudioSegmentsProcessing as ASP, AudioProcessingError
+from text_processing import PlaylistFileProcessing, TextProcessingException
+from audio_processing import AudioFileProcessing, AudioSegmentsProcessing, AudioProcessingError
+from video_processing import VideoAudioMultiplexer, MoviePyException
 
 """
 This is a simple GUI application that checks if a list of tracks are in compliance with the DJ regulatory standards.
@@ -274,6 +278,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
             self.concatenate_segments()
         if self.concatenated_audio_filename and self.dummy_video.get():
             self.generate_video()
+        self.process_finished()
 
     """ Clicked Cancel button """
     def on_cancel(self):
@@ -287,7 +292,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
     """ Read the text playlist file """
     def read_playlist(self):
         try:
-            self.playlist = PFP(self.track_list.get())
+            self.playlist = PlaylistFileProcessing(self.track_list.get())
 
             read_thread = Thread(
                 target=self.playlist.read_file(),
@@ -319,7 +324,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
         try:
             while self.processing and not self.queue.empty():
                 track_details = self.queue.get()
-                track = AFP(file_path=track_details['track_file'], working_dir=self.work_dir.get())
+                track = AudioFileProcessing(file_path=track_details['track_file'], working_dir=self.work_dir.get())
 
                 track_thread = Thread(
                     target=track.process_track(),
@@ -337,7 +342,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
     def concatenate_segments(self):
         try:
             result_queue = Queue()
-            concat_audio = ASP(self.work_dir.get())
+            concat_audio = AudioSegmentsProcessing(self.work_dir.get())
             concat_thread = Thread(
                 target=concat_audio.concatenate_queue,
                 args=(result_queue, ),
@@ -353,8 +358,38 @@ class DJRegulatoryTrackChecker(ttk.Frame):
 
     """ Generate the video file """
     def generate_video(self):
-        pass
+        try:
+            mux = VideoAudioMultiplexer(
+                video_path=self.dummy_video.get(),
+                audio_path=self.concatenated_audio_filename,
+                output_path=self.work_dir.get()
+            )
 
+            mux_thread = Thread(
+                target=mux.multiplex(),
+                daemon=True
+            )
+
+            mux_thread.start()
+            mux_thread.join()
+            self.processing = False
+        except MoviePyException as mux_err:
+            self.insert_text_log(f"ERROR: {mux_err}\n")
+
+    def process_finished(self):
+        self.interaction_onoff()
+        self.insert_text_log(f"All done. Opening output location...\n{self.work_dir.get()}")
+
+        # Cross-platform open output directory
+        if System() == "Windows":
+            Startfile(self.work_dir.get())
+        elif System() == "Darwin":
+            Popen(["open", self.work_dir.get()])
+        else:
+            Popen(["xdg-open", self.work_dir.get()])
+
+
+""" Main loop """
 if __name__ == '__main__':
     app = ttk.Window(
         title="DJ Regulatory Track Checker",
