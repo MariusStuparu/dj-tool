@@ -8,7 +8,7 @@ import sys
 from setuptools import setup
 
 mainscript = 'App/main.py'
-packages = ['pathlib', 'queue', 'threading', 'ttkbootstrap', 'tkinter']
+packages = ['pathlib', 'queue', 'threading', 'ttkbootstrap', 'tkinter', 'pydub', 'moviepy']
 
 if sys.platform == 'darwin':
     extra_options = dict(
