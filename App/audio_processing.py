@@ -1,15 +1,17 @@
 from pydub import AudioSegment
 from pathlib import Path
 from queue import Queue
+from datetime import datetime
 
-from main import MAX_QUEUE_SIZE
-
+MAX_QUEUE_SIZE = 100
 
 """
 Module to extract a given portion of an audio file.
 """
 
 segments_queue = Queue(MAX_QUEUE_SIZE)
+
+SEGMENTS_SUBFOLDER = 'segments'
 
 
 class AudioProcessingError(Exception):
@@ -20,18 +22,20 @@ class AudioProcessingError(Exception):
 Extract audio segments from the playlist
 """
 class AudioFileProcessing:
-    START_FROM_PERCENT = 0.2
-    SEGMENT_LENGTH_PERCENT = 0.25
-    SUBFOLDER = 'segments'
+    START_FROM_PERCENT = 0.35
+    SEGMENT_LENGTH_PERCENT = 0.1
 
     def __init__(self, file_path, working_dir):
         self.file_path = file_path
         self.working_dir = working_dir
+        subfolder = Path.joinpath(Path(working_dir), SEGMENTS_SUBFOLDER)
+        if not Path.exists(subfolder):
+            Path.mkdir(subfolder)
 
     def process_track(self):
         extension = self.file_path.split('.')[-1]
         file_name_from_path = self.file_path.split('/')[-1]
-        increment = None
+        increment = 1
 
         try:
             with (open(file=self.file_path, mode='rb') as audio_file):
@@ -46,9 +50,10 @@ class AudioFileProcessing:
                 """ Check if the file already exists """
                 check_file_exists = True
                 while check_file_exists:
+                    working_dir = Path(self.working_dir)
                     extract_segment_filename = Path.joinpath(
-                        self.working_dir,
-                        self.SUBFOLDER,
+                        Path(working_dir),
+                        SEGMENTS_SUBFOLDER,
                         f'Segment{increment} {file_name_from_path}')
                     if Path.exists(extract_segment_filename):
                         increment += 1
@@ -69,6 +74,38 @@ Join extracted audio segments into a single audio file
 class AudioSegmentsProcessing:
     def __init__(self, working_dir):
         self.working_dir = working_dir
+        self.subfolder = Path.joinpath(Path(working_dir), SEGMENTS_SUBFOLDER)
+
+    def concatenate_queue(self, queue: Queue) -> Path:
+        segments = []
+
+        while not segments_queue.empty():
+            segments.append(segments_queue.get())
+
+        if len(segments) > 0:
+            concatenated_segments = AudioSegment.empty()
+
+            for segment in segments:
+                with (open(file=segment, mode='rb')) as seg:
+                    segment_audio = AudioSegment.from_file(seg, format='mp3')
+                    concatenated_segments += segment_audio
+
+            current_datetime = datetime.now().strftime('%Y%m%d_%H%M%S')
+            concatenated_segments_filename = Path.joinpath(
+                Path(self.working_dir),
+                f'ConcatenatedAudioSegments_{current_datetime}.mp3'
+            )
+
+            with (open(file=concatenated_segments_filename, mode='wb')) as c_s:
+                concatenated_segments.export(c_s, format='mp3')
+
+            # Cleanup
+            for segment in segments:
+                Path.unlink(segment, missing_ok=True)
+
+            queue.put(concatenated_segments_filename.absolute().as_posix())
+        else:
+            raise AudioProcessingError('Audio Processing Error: No segments to concatenate.')
 
 
 if __name__ == '__main__':

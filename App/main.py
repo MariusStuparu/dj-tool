@@ -1,20 +1,29 @@
 from pathlib import Path
 from queue import Queue
 from threading import Thread
+import os
+from platform import system as System
+from subprocess import Popen
+from tkinter import Tk
 
 from tkinter.filedialog import askdirectory, askopenfilename
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
-from text_processing import PlaylistFileProcessing as PFP, TextProcessingException
-from audio_processing import AudioFileProcessing as AFP, AudioProcessingError
-
+from text_processing import PlaylistFileProcessing, TextProcessingException
+from audio_processing import AudioFileProcessing, AudioSegmentsProcessing, AudioProcessingError
+from video_processing import VideoAudioMultiplexer, MoviePyException
 
 """
 This is a simple GUI application that checks if a list of tracks are in compliance with the DJ regulatory standards.
 """
 
 MAX_QUEUE_SIZE = 100
+
+PROCESS_PERCENT_READ_PLAYLIST = 5
+PROCESS_PERCENT_PROCESS_PLAYLIST = 75
+PROCESS_PERCENT_CONCATENATE_SEGMENTS = 85
+PROCESS_PERCENT_GENERATE_VIDEO = 100
 
 class DJRegulatoryTrackChecker(ttk.Frame):
     processing = False
@@ -43,6 +52,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
         self.track_list = ttk.StringVar()
         self.dummy_video = ttk.StringVar()
         self.playlist = None
+        self.concatenated_audio_filename = None
 
         """ Runtime flags """
         self.playlist_read = False
@@ -221,7 +231,9 @@ class DJRegulatoryTrackChecker(ttk.Frame):
         self.outlog_text['state'] = NORMAL
         self.outlog_text.delete('1.0', END) if clear else None
         self.outlog_text.insert(END, text)
+        self.outlog_text.see(END)
         self.outlog_text['state'] = DISABLED
+        Tk.update(self)
 
     """
     Event handlers
@@ -268,7 +280,13 @@ class DJRegulatoryTrackChecker(ttk.Frame):
             s_f.write(f"dummy_video='{self.dummy_video.get()}'\n")
 
         self.read_playlist()
-        if self.playlist_read: self.process_playlist()
+        if self.playlist_read:
+            self.process_playlist()
+        if self.playlist_processed:
+            self.insert_text_log("Joining all audio segments...\n")
+            self.concatenate_segments()
+        if self.concatenated_audio_filename and self.dummy_video.get():
+            self.generate_video()
 
     """ Clicked Cancel button """
     def on_cancel(self):
@@ -282,12 +300,14 @@ class DJRegulatoryTrackChecker(ttk.Frame):
     """ Read the text playlist file """
     def read_playlist(self):
         try:
-            self.playlist = PFP(self.track_list.get())
+            self.playlist = PlaylistFileProcessing(self.track_list.get())
 
-            Thread(
+            read_thread = Thread(
                 target=self.playlist.read_file(),
                 daemon=True
-            ).start()
+            )
+            read_thread.start()
+            read_thread.join()
 
             self.tracks_count = len(self.playlist.tracks)
 
@@ -301,7 +321,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
                     self.queue.put(item)
 
             self.insert_text_log(text=f"Playlist loaded with {self.tracks_count} tracks\n", clear=True)
-            self.progress_bar['value'] = 5
+            self.progress_bar['value'] = PROCESS_PERCENT_READ_PLAYLIST
         except TextProcessingException as txt_err:
             self.insert_text_log(f"ERROR: {txt_err}\n")
 
@@ -309,26 +329,84 @@ class DJRegulatoryTrackChecker(ttk.Frame):
 
     """ Process the playlist """
     def process_playlist(self):
-        try:
-            while not self.queue.empty():
-                track_details = self.queue.get()
-                track = AFP(file_path=track_details['track_file'], working_dir=self.work_dir.get())
+        queue_length = self.queue.qsize()
+        progress_increment = (PROCESS_PERCENT_PROCESS_PLAYLIST - PROCESS_PERCENT_READ_PLAYLIST) / queue_length
 
-                Thread(
-                    target=track.process_track(),
-                    daemon=True
-                ).start()
-        except AudioProcessingError as audio_err:
-            self.insert_text_log(f"ERROR: {audio_err}\n")
+        while self.processing and not self.queue.empty():
+            track_details = self.queue.get()
+            track = AudioFileProcessing(file_path=track_details['track_file'], working_dir=self.work_dir.get())
+            self.insert_text_log(f"Processing track: {track_details['track_file']}\n")
+            self.progress_bar['value'] += progress_increment
+            Tk.update(self)
+
+            try:
+                track.process_track()
+            except AudioProcessingError as audio_err:
+                self.insert_text_log(f"ERROR: {audio_err}")
 
         self.playlist_processed = True
 
 
+    """ Join the generated segments into a single mp3 track """
+    def concatenate_segments(self):
+        try:
+            result_queue = Queue()
+            concat_audio = AudioSegmentsProcessing(self.work_dir.get())
+            self.progress_bar['value'] = PROCESS_PERCENT_CONCATENATE_SEGMENTS
+            Tk.update(self)
+            concat_audio.concatenate_queue(result_queue)
+
+            if not result_queue.empty():
+                self.concatenated_audio_filename = result_queue.get()
+        except AudioProcessingError as concat_err:
+            self.insert_text_log(f"ERROR: {concat_err}")
+
+    """ Generate the video file """
+    def generate_video(self):
+        self.insert_text_log("Generating video. Please be patient, it might take a while (depending on your CPU and playlist size...\n")
+        try:
+            mux = VideoAudioMultiplexer(
+                video_path=self.dummy_video.get(),
+                audio_path=self.concatenated_audio_filename,
+                output_path=self.work_dir.get()
+            )
+
+            mux_thread = Thread(
+                target=mux.multiplex(),
+                daemon=True
+            )
+
+            mux_thread.start()
+            mux_thread.join()
+            self.progress_bar['value'] = PROCESS_PERCENT_GENERATE_VIDEO
+            Tk.update(self)
+            self.process_finished()
+        except MoviePyException as mux_err:
+            self.insert_text_log(f"ERROR: {mux_err}\n")
+        finally:
+            self.processing = False
+            self.interaction_onoff()
+
+    def process_finished(self):
+        self.interaction_onoff()
+        self.insert_text_log(f"All done. Opening output location...\n{self.work_dir.get()}")
+
+        # Cross-platform open output directory
+        if System() == "Windows":
+            os.startfile(self.work_dir.get())
+        elif System() == "Darwin":
+            Popen(["open", self.work_dir.get()])
+        else:
+            Popen(["xdg-open", self.work_dir.get()])
+
+
+""" Main loop """
 if __name__ == '__main__':
     app = ttk.Window(
         title="DJ Regulatory Track Checker",
         themename="superhero",
         minsize=(800, 800),
+        iconphoto="icon_512.ico"
     )
     app.place_window_center()
     DJRegulatoryTrackChecker(app)

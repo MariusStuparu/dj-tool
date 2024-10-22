@@ -6,10 +6,15 @@ name = "pypi"
 [packages]
 ttkbootstrap = "*"
 pydub = "*"
+moviepy = "*"
 
 [dev-packages]
 py2app = "*"
+setuptools = "==70.3.0"
 
 [requires]
 python_version = "3.11"
 python_full_version = "3.11.7"
+
+[pipenv]
+disable_pip_input = true

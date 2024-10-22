@@ -7,39 +7,45 @@ Usage:
 import sys
 from setuptools import setup
 
-mainscript = 'App/main.py'
-packages = ['pathlib', 'queue', 'threading', 'ttkbootstrap', 'tkinter']
+includes = [
+    'pathlib', 'queue', 'threading', 'os', 'platform', 'subprocess', 'datetime',
+    'ttkbootstrap', 'tkinter', 'pydub', 'moviepy'
+]
+packages = [
+    'App'
+]
 
 if sys.platform == 'darwin':
     extra_options = dict(
         setup_requires=['py2app'],
-        app=[mainscript],
         # Cross-platform applications generally expect sys.argv to
         # be used for opening files.
         # Don't use this with GUI toolkits, the argv
         # emulator causes problems and toolkits generally have
         # hooks for responding to file-open events.
         options=dict(py2app=dict(argv_emulation=False)),
-        includes=packages,
-        iconfile='App/Assets/icon.icns',
+        iconfile='App/Assets/icon_512.icns',
+        arch='universal2',
     )
 elif sys.platform == 'win32':
     extra_options = dict(
         setup_requires=['py2exe'],
-        app=[mainscript],
-        includes=packages,
-        iconfile='App/Assets/icon.ico',
+        iconfile='App/Assets/icon_512.ico',
+        arch='x86_64',
     )
 else:
     extra_options = dict(
         # Normally unix-like platforms will use "setup.py install"
         # and install the main script as such
-        scripts=[mainscript],
-        includes=packages,
-        iconfile='App/Assets/icon.ico',
+        iconfile='App/Assets/icon_512.ico',
     )
 
 setup(
     name="DJ Regulatory Track Checker",
+    app=['App/main.py'],
+    includes=includes,
+    packages=packages,
+    no_strip=True,
+    use_faulthandler=True,
     **extra_options
 )

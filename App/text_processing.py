@@ -1,3 +1,5 @@
+import re
+
 """
 This module is responsible for processing the playlist file.
 """
@@ -20,20 +22,21 @@ class PlaylistFileProcessing:
                 line = 0
                 while line < len(lines):
                     if lines[line].startswith('#EXTVDJ'):
-                        data = lines[line].replace('#EXTVDJ:', '').replace('\n', '')
+                        data = lines[line].replace('#EXTVDJ:', '')
                         track_data = self.extract_xml_data(data)
+                        track_file = lines[line + 1].replace('\n', '')
                         self.tracks.append({
-                            'track_name': track_data,
-                            'track_file': lines[line+1]
+                            **track_data,
+                            'track_file': track_file
                         })
                         line += 2
                         continue
                     elif lines[line].startswith('#EXTINF'):
-                        data = lines[line].replace('#EXTINF:', '').replace('\n', '')
+                        data = lines[line].replace('#EXTINF:', '')
                         track_data = self.extract_track_data(data)
                         self.tracks.append({
                             **track_data,
-                            'track_file': lines[line + 1]
+                            'track_file': track_file
                         })
                         line += 2
                         continue
@@ -49,9 +52,12 @@ class PlaylistFileProcessing:
         param text: The text to extract the XML data from.
         :return: The XML data as a dictionary.
         """
-        extraxted_data = {}
+        cleaner = re.compile('<.*?>')
 
-        return extraxted_data
+        extracted_data = {}
+        extracted_data['track_name'] = re.sub(cleaner, ' ', text)
+
+        return extracted_data
 
     @staticmethod
     def extract_track_data(incoming_text) -> dict:
