@@ -3,8 +3,7 @@ from pathlib import Path
 from queue import Queue
 from datetime import datetime
 
-from main import MAX_QUEUE_SIZE
-
+MAX_QUEUE_SIZE = 100
 
 """
 Module to extract a given portion of an audio file.
@@ -107,5 +106,4 @@ class AudioSegmentsProcessing:
 
 
 if __name__ == '__main__':
-    def __init__(self, working_dir):
-        self.working_dir = working_dir
+    pass
