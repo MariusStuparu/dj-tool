@@ -9,8 +9,7 @@ pydub = "*"
 moviepy = "*"
 
 [dev-packages]
-py2app = "*"
-setuptools = "==70.3.0"
+pyinstaller = "*"
 
 [requires]
 python_version = "3.11"
