@@ -1,7 +1,7 @@
 from pathlib import Path
 from queue import Queue
 from threading import Thread
-from os import startfile as Startfile
+import os
 from platform import system as System
 from subprocess import Popen
 
@@ -18,6 +18,11 @@ This is a simple GUI application that checks if a list of tracks are in complian
 """
 
 MAX_QUEUE_SIZE = 100
+
+PROCESS_PERCENT_READ_PLAYLIST = 5
+PROCESS_PERCENT_PROCESS_PLAYLIST = 75
+PROCESS_PERCENT_CONCATENATE_SEGMENTS = 85
+PROCESS_PERCENT_GENERATE_VIDEO = 100
 
 class DJRegulatoryTrackChecker(ttk.Frame):
     processing = False
@@ -313,7 +318,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
                     self.queue.put(item)
 
             self.insert_text_log(text=f"Playlist loaded with {self.tracks_count} tracks\n", clear=True)
-            self.progress_bar['value'] = 5
+            self.progress_bar['value'] = PROCESS_PERCENT_READ_PLAYLIST
         except TextProcessingException as txt_err:
             self.insert_text_log(f"ERROR: {txt_err}\n")
 
@@ -321,6 +326,9 @@ class DJRegulatoryTrackChecker(ttk.Frame):
 
     """ Process the playlist """
     def process_playlist(self):
+        queue_length = self.queue.qsize()
+        progress_increment = (PROCESS_PERCENT_PROCESS_PLAYLIST - PROCESS_PERCENT_READ_PLAYLIST) / queue_length
+
         try:
             while self.processing and not self.queue.empty():
                 track_details = self.queue.get()
@@ -333,6 +341,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
 
                 track_thread.start()
                 track_thread.join()
+                self.progress_bar['value'] += progress_increment
         except AudioProcessingError as audio_err:
             self.insert_text_log(f"ERROR: {audio_err}\n")
 
@@ -350,6 +359,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
             )
             concat_thread.start()
             concat_thread.join()
+            self.progress_bar['value'] = PROCESS_PERCENT_CONCATENATE_SEGMENTS
 
             if not result_queue.empty():
                 self.concatenated_audio_filename = result_queue.get()
@@ -372,6 +382,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
 
             mux_thread.start()
             mux_thread.join()
+            self.progress_bar['value'] = PROCESS_PERCENT_GENERATE_VIDEO
             self.processing = False
         except MoviePyException as mux_err:
             self.insert_text_log(f"ERROR: {mux_err}\n")
@@ -382,7 +393,7 @@ class DJRegulatoryTrackChecker(ttk.Frame):
 
         # Cross-platform open output directory
         if System() == "Windows":
-            Startfile(self.work_dir.get())
+            os.startfile(self.work_dir.get())
         elif System() == "Darwin":
             Popen(["open", self.work_dir.get()])
         else:
